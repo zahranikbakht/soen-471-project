@@ -4,7 +4,7 @@ Introduction
  
 Dataset
 
-We plan to combine 3 datasets to get various information on the 1000 top grossing movies. Initially, we will take the dataset found here which includes data on the top 1000 highest grossing movies to date. It will be merged with another dataset from here which includes data on 5000 movies from TMDB and another one here that has 50000 movies from IMDB to provide more features for our model.
+We plan to combine 3 datasets to get various information on the 1000 top grossing movies. Initially, we will take the dataset found https://www.kaggle.com/sanjeetsinghnaik/top-1000-highest-grossing-movies which includes data on the top 1000 highest grossing movies to date. It will be merged with another dataset from https://www.kaggle.com/sanjeetsinghnaik/top-1000-highest-grossing-movies which includes data on 5000 movies from TMDB and another one https://www.kaggle.com/sanjeetsinghnaik/top-1000-highest-grossing-movies that has 50000 movies from IMDB to provide more features for our model.
 The 14 features that we are going to incorporate in our model are: Distributor Name, Genre, Runtime, Release Date, Budget, Number of the cast, gender of the main actor, gender of the second-main actor, Number of the crew, TMBD rating, IMDB rating, content rating (PG-13, R, etc), total cast Facebook likes and movie Facebook likes.
 The range of movie revenue that we have in our database is from 81 million dollars to 2.8 billion dollars. We will categorize this range into 10 equal-size intervals of length 200 million dollars each. We will then predict which of these 10 intervals (labels) a movie will fall into. It’s important to note that we aim to provide an estimate of a movie’s success rather than its precise revenue.
  
