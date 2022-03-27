@@ -134,7 +134,8 @@ cols = dataset.columns
 for col in cols:
     dataset = dataset.filter(dataset[str(col)].isNotNull())
 
-# Converting profit to be represented by the scale: A-F
+
+# Converting profit to be represented on the scale: A-F
 # Step 1:   Add a profit column. Remove revenue and budget columns.
 #           Sort by profit (descending order).
 dataset = (
@@ -159,14 +160,13 @@ count = dataset.count() // 6
 dataset = (
     dataset.withColumn(
         "profit_grade",
-        when((0 <= dataset.id) & (dataset.id < count), "A")
-        .when((count + 1 <= dataset.id) & (dataset.id < count * 2 + 1), "B")
-        .when(((count + 1) * 2 <= dataset.id) & (dataset.id < count * 3 + 2), "C")
-        .when(((count + 1) * 3 <= dataset.id) & (dataset.id < count * 4 + 3), "D")
-        .when(((count + 1) * 4 <= dataset.id) & (dataset.id < count * 5 + 4), "E")
+        when((dataset.id >= 0) & (dataset.id < count), "A")
+        .when((dataset.id >= (count + 1)) & (dataset.id < count * 2 + 1), "B")
+        .when((dataset.id >= (count + 1) * 2) & (dataset.id < count * 3 + 2), "C")
+        .when((dataset.id >= (count + 1) * 3) & (dataset.id < count * 4 + 3), "D")
+        .when((dataset.id >= (count + 1) * 4) & (dataset.id < count * 5 + 4), "E")
         .otherwise("F"),
-    )
-    .drop(*["id", "profit"])
+    ).drop(*["id", "profit"])
     # Randomize to "unsort" dataset.
     .orderBy(rand())
 )
