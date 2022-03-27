@@ -1,13 +1,13 @@
 import csv
 import os
+import platform
 import sys
+
 # Spark imports
 from pyspark.rdd import RDD
-from pyspark.sql import DataFrame
-from pyspark.sql import SparkSession
-from pyspark.sql.functions import desc, udf
-
-from pyspark.sql.types import IntegerType, StringType
+from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql.functions import *
+from pyspark.sql.types import IntegerType, LongType, StringType
 
 
 # Initialize a spark session.
@@ -78,7 +78,7 @@ def imdb_title(title):
 
 
 # IMDB database
-imdb_dataset = load_df_from_csv("datasets\imdb_movie_metadata.csv")
+imdb_dataset = load_df_from_csv("datasets" + ("\\" if platform.system() == "Windows" else "/") + "imdb_movie_metadata.csv")
 imdb_dataset = imdb_dataset.drop("color", "director_name", "director_facebook_likes", "num_critic_for_reviews",
                                  "actor_3_facebook_likes", "actor_2_name", "actor_1_name", "num_voted_users",
                                  "actor_3_name", "facenumber_in_poster", "plot_keywords", "movie_imdb_link",
@@ -133,6 +133,44 @@ dataset = two_tmdb_joined.join(imdb_dataset, two_tmdb_joined.title == imdb_datas
 cols = dataset.columns
 for col in cols:
     dataset = dataset.filter(dataset[str(col)].isNotNull())
+
+# Converting profit to be represented by the scale: A-F
+# Step 1:   Add a profit column. Remove revenue and budget columns.
+#           Sort by profit (descending order).
+dataset = (
+    dataset.withColumn(
+        "profit",
+        (dataset["revenue"].cast(LongType()) - dataset["budget"].cast(LongType())),
+    )
+    .drop(*["revenue", "budget"])
+    .sort("profit", ascending=False)
+)
+# Step 2:   Add an incremental ID in the "id" column to assign a grade.
+#           Convert back to dataframe.
+columns = dataset.columns
+dataset = (
+    dataset.rdd.zipWithIndex()
+    .map(lambda x: (x[1],) + tuple(x[0]))
+    .toDF(["id"] + columns)
+)
+# Step 3:   Assign a grade in the "profit_grade" column, corresponding to the value.
+#           Remove id and profit columns.
+count = dataset.count() // 6
+dataset = (
+    dataset.withColumn(
+        "profit_grade",
+        when((0 <= dataset.id) & (dataset.id < count), "A")
+        .when((count + 1 <= dataset.id) & (dataset.id < count * 2 + 1), "B")
+        .when(((count + 1) * 2 <= dataset.id) & (dataset.id < count * 3 + 2), "C")
+        .when(((count + 1) * 3 <= dataset.id) & (dataset.id < count * 4 + 3), "D")
+        .when(((count + 1) * 4 <= dataset.id) & (dataset.id < count * 5 + 4), "E")
+        .otherwise("F"),
+    )
+    .drop(*["id", "profit"])
+    # Randomize to "unsort" dataset.
+    .orderBy(rand())
+)
+
 
 #print the final schema
 print(dataset.count()) # we end up with 3811 movies
