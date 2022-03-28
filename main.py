@@ -150,7 +150,8 @@ print(dataset.printSchema())
 #
 # new_dataset.show()
 
-
+# This will create a new column which categorizes the ratings numerically by most common being 0, second most being 1, and so on.
+# Showing 100 rows for now
 indexer = StringIndexer(inputCol='content_rating', outputCol='ContentIndex')
 indexed = indexer.fit(dataset).transform(dataset)
 indexed.show(100, truncate=False)
