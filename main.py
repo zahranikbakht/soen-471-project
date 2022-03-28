@@ -137,3 +137,21 @@ for col in cols:
 #print the final schema
 print(dataset.count()) # we end up with 3811 movies
 print(dataset.printSchema())
+
+# Possible other method to categorize. This one unfortunately only puts 1's and 0's but doesn't create a new column.
+# Might need to update loop
+
+# distinct_rating = dataset.select('content_rating').distinct().rdd.flatMap(lambda x: x).collect()
+#
+# for distinct_rating in distinct_rating:
+#     function = udf(lambda item: 1 if item == distinct_rating else 0, IntegerType())
+#     new_column_rating = "content_rating"+'_'+distinct_rating
+#     new_dataset = dataset.withColumn(new_column_rating, function("content_rating"))
+#
+# new_dataset.show()
+
+# This will create a new column which categorizes the ratings numerically by most common being 0, second most being 1, and so on.
+# Showing 100 rows for now
+indexer = StringIndexer(inputCol='content_rating', outputCol='ContentIndex')
+indexed = indexer.fit(dataset).transform(dataset)
+indexed.show(100, truncate=False)
