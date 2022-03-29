@@ -7,7 +7,8 @@ from pyspark.rdd import RDD
 from pyspark.sql import DataFrame
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import desc, udf, col, split, lit, when, array_contains
-from pyspark.ml.feature import StringIndexer, OneHotEncoder
+from pyspark.ml.feature import StringIndexer, OneHotEncoder, VectorAssembler
+from pyspark.ml.linalg import Vectors
 import pandas as pd
 
 from pyspark.sql.types import IntegerType, StringType
@@ -150,27 +151,12 @@ print(dataset.printSchema())
 print()
 
 
-def toCSVLineRDD(rdd):
-    '''
-    This function convert an RDD or a DataFrame into a CSV string
-    '''
-    a = rdd.map(lambda row: ",".join([str(elt) for elt in row]))\
-           .reduce(lambda x, y: os.linesep.join([x, y]))
-    return a + os.linesep
 
+# Noah's part
+# PROCESSING THE GENRES INTO 2 FORMATS:
+# 1) StringIndexer + OneHotEncoding => output in file "genres_output/output-noah-index-encoded.csv"
+# 2) StringIndexer + OneHotEncoding + VectorAssembler => output in file "genres_output/output-noah-vector.csv"
 
-def toCSVLine(data):
-    '''
-    Convert an RDD or a DataFrame into a CSV string
-    '''
-    if isinstance(data, RDD):
-        return toCSVLineRDD(data)
-    elif isinstance(data, DataFrame):
-        return toCSVLineRDD(data.rdd)
-    return None
-
-
-# TEST moving the columns around (all column selected)
 initial_column_names = ['title', 'genres', 'production_companies', 'vote_average', 'revenue', 'release_year', 'release_month',
                         'cast_number', 'first_cast_gender', 'second_cast_gender', 'duration', 'cast_total_facebook_likes', 'content_rating', 'budget',
                         'imdb_score', 'movie_facebook_likes']
@@ -181,10 +167,6 @@ dataset = dataset.select('title', 'genres', 'production_companies', 'vote_averag
 # dataset.show()
 # dataset.toPandas().to_csv('output-dataset.csv')
 
-
-# Processing the genres
-
-
 def get_dataset_movie_genres(dataset=dataset):
     ''' Input: dataset (df)
     Output: "list" of all unique genres from the dataset (df)
@@ -194,13 +176,8 @@ def get_dataset_movie_genres(dataset=dataset):
     getAllGenres_rdd = getAllGenres.rdd
     getAllGenres_rdd = getAllGenres_rdd.map(lambda x: (x[0], x[1].split("|")))
 
-    fixedListOfGenres = getAllGenres_rdd.flatMap(lambda x: (x[1])).distinct()
-    # !! This list all the distinct genres from our dataset!
-
-    # print(fixedListOfGenres.collect())
-
-    first10 = getAllGenres_rdd.collect()[1:10]
-    # print(first10)
+    fixedListOfGenres = getAllGenres_rdd.flatMap(lambda x: (x[1])).distinct() # This list all the distinct genres from our dataset!
+    
     getAllGenres_df = getAllGenres_rdd.toDF(["Title", "Genres array"])
     getAllGenres_df.printSchema()
     # getAllGenres_df.show(10)
@@ -210,7 +187,7 @@ def get_dataset_movie_genres(dataset=dataset):
 
 
 
-# TEST Add new columns, one for each genre, for each movie
+# Add new columns, one for each genre, for each movie
 
 def split_column_of_genres_string_in_array(dataset=dataset):
     ''' input: dataset as Dataframe
@@ -227,7 +204,7 @@ def split_column_of_genres_string_in_array(dataset=dataset):
 def split_col_genres_in_array_rdd(dataset=dataset):
     ''' Transform the genres column (string) into an array. Output as a rdd
     '''
-    # index of genre is 1
+    # index of genre in the dataset is 1
     dataset_as_rdd = dataset.rdd.map(lambda x: tuple(
         x[i] if i != 1 else x[1].split("|") for i in range(16)))
     return dataset_as_rdd
@@ -235,17 +212,18 @@ def split_col_genres_in_array_rdd(dataset=dataset):
 
 # Running my results
 def processing_dataset_genres():
+    '''Takes dataset (where the genres column changed from type string -> string[] ) + list of genres (generated from dataset)
+    and output the dataset (as dataframe) after applying StringIndexer
+    '''
     test_all_genres = get_dataset_movie_genres() # Generate all the new columns to add to dataframe
     test_all_genres = test_all_genres.collect()
     print(test_all_genres)
 
     # dataset (as rdd) but the genres column String -> String[]
     test_rdd = split_col_genres_in_array_rdd()
-    # print(test_rdd.collect()[0:10])
 
 
     test_df = test_rdd.toDF(initial_column_names)  # turn dataset back to dataframe
-    # test_df.show(10)
 
     # adding the new columns
     test_df_2 = test_df
@@ -274,21 +252,29 @@ def processing_dataset_genres():
 indexed, test_all_genres = processing_dataset_genres()
 
 # One Hot encoder
-inputs = [genre + '_index' for genre in test_all_genres]
-outputs = [genre + '_ohe' for genre in test_all_genres]
-encoder = OneHotEncoder(inputCols=inputs, outputCols=outputs)
-model = encoder.fit(indexed)
-encoded = model.transform(indexed)
-encoded.toPandas().to_csv('./genres_output/output-noah-index-encoded.csv')
-# encoded.show(10)
-# encoded.select(['{g}_ohc'.format(g=genre) for genre in test_all_genres]).show(10)
+def one_hot_encoder_genres(test_all_genres=test_all_genres, indexed=indexed):
+    ''' Takes output of processing_dataset_genres() and apply one hot encoding
+    See result in file "./genres_output/output-noah-index-encoded.csv"
+    '''
+    inputs = [genre + '_index' for genre in test_all_genres]
+    outputs = [genre + '_ohe' for genre in test_all_genres]
+    encoder = OneHotEncoder(inputCols=inputs, outputCols=outputs)
+    model = encoder.fit(indexed)
+    encoded = model.transform(indexed)
+    encoded.toPandas().to_csv('./genres_output/output-noah-index-encoded.csv')
+    return encoded, outputs
 
-print('End of current test.')
+dataset_genres_ok, encoded_column_names = one_hot_encoder_genres()
+
+# Vector Assembler -> doesnt work 
+# def vector_genres(indexed=indexed, test_all_genres=test_all_genres):
+#     inputs = ['{g}_index'.format(g) for g in test_all_genres]
+#     assembler = VectorAssembler(inputCols=inputs, outputCol="genres_as_vector")
+#     dataset_genres_vector = assembler.transform(indexed)
+#     dataset_genres_vector.drop(test_all_genres)
+#     dataset_genres_vector.toPandas().to_csv('./genres_output/output-noah-vector.csv')
+#     return dataset_genres_vector
+# dataset_genres_vector = vector_genres()
 
 
-
-
-# TODO: write a function that maps different genres variation to the fixed genres
-
-# getAllGenres.toPandas().to_csv('./genres_output/output_genres.csv')
 
