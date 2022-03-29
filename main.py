@@ -182,7 +182,7 @@ dataset = dataset.select('title', 'genres', 'production_companies', 'vote_averag
 # dataset.toPandas().to_csv('output-dataset.csv')
 
 
-# TEST Get all the movie genre and store them in some list
+# Processing the genres
 
 
 def get_dataset_movie_genres(dataset=dataset):
@@ -220,66 +220,72 @@ def split_column_of_genres_string_in_array(dataset=dataset):
         split(dataset.genres, '[|]').alias('genres_arr'))
     dataset_with_newcolumn = dataset.select(
         split(dataset.genres, '[|]').alias('genres_arr'))
-    # dataset_with_newcolumn.show(10)
     dataset_with_newcolumn.printSchema()
     return dataset_with_newcolumn
 
 
 def split_col_genres_in_array_rdd(dataset=dataset):
+    ''' Transform the genres column (string) into an array. Output as a rdd
+    '''
     # index of genre is 1
     dataset_as_rdd = dataset.rdd.map(lambda x: tuple(
         x[i] if i != 1 else x[1].split("|") for i in range(16)))
-
-    # print(dataset_as_rdd.collect()[0:10])
     return dataset_as_rdd
 
 
 # Running my results
-# Generate all the new columns to add to dataframe
-test_all_genres = get_dataset_movie_genres()
-test_all_genres = test_all_genres.collect()
-print(test_all_genres)
+def processing_dataset_genres():
+    test_all_genres = get_dataset_movie_genres() # Generate all the new columns to add to dataframe
+    test_all_genres = test_all_genres.collect()
+    print(test_all_genres)
 
-# dataset (as rdd) but the genres column String -> String[]
-test_rdd = split_col_genres_in_array_rdd()
-# print(test_rdd.collect()[0:10])
-
-
-test_df = test_rdd.toDF(initial_column_names)  # turn dataset back to dataframe
-# test_df.show(10)
-
-# adding the new columns
-test_df_2 = test_df
-for new_genre in test_all_genres:
-    test_df_2 = test_df_2.withColumn(new_genre,
-                       when(array_contains(test_df.genres, new_genre), lit(new_genre))
-                       .otherwise(lit(''))
-                       )
-test_df_2.drop('genres')
-test_df_2.printSchema()
-# test_df_2.toPandas().to_csv('./genres_output/output-noah-result.csv')
+    # dataset (as rdd) but the genres column String -> String[]
+    test_rdd = split_col_genres_in_array_rdd()
+    # print(test_rdd.collect()[0:10])
 
 
-# StringIndexer
-indexed = test_df_2 
-for new_genre in test_all_genres:
-    indexer = StringIndexer(inputCol=new_genre, outputCol='{g}_index'.format(g=new_genre))
-    indexed = indexer.fit(indexed).transform(indexed)
-    indexed = indexed.drop(new_genre)
+    test_df = test_rdd.toDF(initial_column_names)  # turn dataset back to dataframe
+    # test_df.show(10)
 
-# indexed.show()
-indexed.toPandas().to_csv('./genres_output/output-noah-string-indexed-result.csv')
+    # adding the new columns
+    test_df_2 = test_df
+    for new_genre in test_all_genres:
+        test_df_2 = test_df_2.withColumn(new_genre,
+                        when(array_contains(test_df.genres, new_genre), lit(new_genre))
+                        .otherwise(lit('n/a'))
+                        )
+    test_df_2.drop('genres')
+    test_df_2.printSchema()
+    # test_df_2.toPandas().to_csv('./genres_output/output-noah-result.csv')
+
+
+    # StringIndexer
+    indexed = test_df_2 
+    for new_genre in test_all_genres:
+        indexer = StringIndexer(inputCol=new_genre, outputCol='{g}_index'.format(g=new_genre))
+        indexed = indexer.fit(indexed).transform(indexed)
+        indexed = indexed.drop(new_genre)
+
+    # indexed.show()
+    indexed.toPandas().to_csv('./genres_output/output-noah-string-indexed-result.csv')
+
+    return indexed, test_all_genres
+    
+indexed, test_all_genres = processing_dataset_genres()
 
 # One Hot encoder
-ohe = OneHotEncoder()
-ohe.setInputCols(["genre_1"])
+inputs = [genre + '_index' for genre in test_all_genres]
+outputs = [genre + '_ohe' for genre in test_all_genres]
+encoder = OneHotEncoder(inputCols=inputs, outputCols=outputs)
+model = encoder.fit(indexed)
+encoded = model.transform(indexed)
+encoded.toPandas().to_csv('./genres_output/output-noah-index-encoded.csv')
+# encoded.show(10)
+# encoded.select(['{g}_ohc'.format(g=genre) for genre in test_all_genres]).show(10)
 
 print('End of current test.')
 
 
-# TEST 3: Convert dataset into new dataset with 12 ish new column for the 11 fixed genres + misc OR get from grouping the dataset
-fixed_genres = ["action", "adventure", "drama", "horror", "comedy", "romantic",
-                "historical", "thriller", "mystery", "sci-fi", "fantasy", "family", "sport", "Other"]
 
 
 # TODO: write a function that maps different genres variation to the fixed genres
