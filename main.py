@@ -7,7 +7,7 @@ from pyspark.rdd import RDD
 from pyspark.sql import DataFrame
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import desc, udf, col, split, lit, when, array_contains
-from pyspark.ml.feature import StringIndexer
+from pyspark.ml.feature import StringIndexer, OneHotEncoder
 import pandas as pd
 
 from pyspark.sql.types import IntegerType, StringType
@@ -261,13 +261,18 @@ test_df_2.printSchema()
 
 
 # StringIndexer
+indexed = test_df_2 
 for new_genre in test_all_genres:
     indexer = StringIndexer(inputCol=new_genre, outputCol='{g}_index'.format(g=new_genre))
-    indexed = indexer.fit(test_df_2).transform(test_df_2)
+    indexed = indexer.fit(indexed).transform(indexed)
+    indexed = indexed.drop(new_genre)
 
 # indexed.show()
 indexed.toPandas().to_csv('./genres_output/output-noah-string-indexed-result.csv')
 
+# One Hot encoder
+ohe = OneHotEncoder()
+ohe.setInputCols(["genre_1"])
 
 print('End of current test.')
 
@@ -281,9 +286,3 @@ fixed_genres = ["action", "adventure", "drama", "horror", "comedy", "romantic",
 
 # getAllGenres.toPandas().to_csv('./genres_output/output_genres.csv')
 
-
-# Processing gender
-
-# test = dataset.select('title', 'content_rating').where(dataset.content_rating != 'PG')
-# test.show()
-# test.toPandas().to_csv('get_weird_content_rating.csv')
