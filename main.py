@@ -5,7 +5,8 @@ import sys
 from pyspark.rdd import RDD
 from pyspark.sql import DataFrame
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import desc, udf
+from pyspark.sql.functions import desc, udf, col, split
+import pandas as pd
 
 from pyspark.sql.types import IntegerType, StringType
 
@@ -78,7 +79,7 @@ def imdb_title(title):
 
 
 # IMDB database
-imdb_dataset = load_df_from_csv("datasets\imdb_movie_metadata.csv")
+imdb_dataset = load_df_from_csv("datasets/imdb_movie_metadata.csv")
 imdb_dataset = imdb_dataset.drop("color", "director_name", "director_facebook_likes", "num_critic_for_reviews",
                                  "actor_3_facebook_likes", "actor_2_name", "actor_1_name", "num_voted_users",
                                  "actor_3_name", "facenumber_in_poster", "plot_keywords", "movie_imdb_link",
@@ -137,3 +138,68 @@ for col in cols:
 #print the final schema
 print(dataset.count()) # we end up with 3811 movies
 print(dataset.printSchema())
+print()
+
+# 
+# Noah: get genre
+#
+def toCSVLineRDD(rdd):
+    '''
+    This function convert an RDD or a DataFrame into a CSV string
+    '''
+    a = rdd.map(lambda row: ",".join([str(elt) for elt in row]))\
+           .reduce(lambda x,y: os.linesep.join([x,y]))
+    return a + os.linesep
+def toCSVLine(data):
+    '''
+    Convert an RDD or a DataFrame into a CSV string
+    '''
+    if isinstance(data, RDD):
+        return toCSVLineRDD(data)
+    elif isinstance(data, DataFrame):
+        return toCSVLineRDD(data.rdd)
+    return None
+
+print('Trying to print "dataset":')
+
+# dataset.show()
+# dataset.toPandas().to_csv('output-dataset.csv') 
+
+# TEST Add new columns, one for each genre, for each movie
+dataset_with_newcolumn = dataset.select(split(dataset.genres, '[|]').alias('genres_arr')).collect()
+print(dataset_with_newcolumn[20])
+
+# TEST Get all the movie genre and store them in some list 
+getAllGenres = dataset.select('title', 'genres')
+getAllGenres.show()
+getAllGenres_rdd = getAllGenres.rdd
+getAllGenres_rdd = getAllGenres_rdd.map(lambda x: (x[0], x[1].split("|")))
+
+fixedListOfGenres = getAllGenres_rdd.flatMap(lambda x: (x[1])).distinct()
+print(fixedListOfGenres.collect()) # !! This list all the distinct genres from our dataset!
+
+
+# fixedListOfGenres_list = fixedListOfGenres.groupByKey().collect()[1:10]
+# print(fixedListOfGenres_list)
+first10 = getAllGenres_rdd.collect()[1:10]
+# print(first10)
+getAllGenres_df = getAllGenres_rdd.toDF(["Title", "Genres array"])
+getAllGenres_df.printSchema()
+getAllGenres_df.show(10)
+
+# TEST 2: Convert dataset into new dataset with 12 ish new column for the 11 fixed genres + misc OR get from grouping the dataset
+fixed_genres = ["action", "adventure" , "drama", "horror", "comedy", "romantic", "historical", "thriller", "mystery", "sci-fi", "fantasy", "family", "sport", "Other"]
+
+
+# TODO: write a function that maps different genres variation to the fixed genres
+
+# getAllGenres.toPandas().to_csv('output_genres.csv')
+
+
+# Processing gender
+
+# test = dataset.select('title', 'content_rating').where(dataset.content_rating != 'PG')
+# test.show()
+# test.toPandas().to_csv('get_weird_content_rating.csv')
+
+
